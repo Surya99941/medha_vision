@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedhaVision - Medical Image Analysis</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>MedhaVision</h1>
+        <nav>
+            <a href="#">Upload</a>
+            <a href="#/patients">Patients</a>
+        </nav>
+    </header>
+    
+    <main>
+        <div class="container">
+            <div id="page-container">
+                <!-- JavaScript will render pages here -->
+            </div>
+            <div id="loading-spinner" class="hidden"></div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 MedhaVision. No rights reserved.</p>
+    </footer>
+
+    <!-- Page Templates -->
+    <template id="home-page">
+        <div id="upload-section">
+            <h2>Upload Patient Scans</h2>
+            <form id="analysis-form">
+                <div class="form-group">
+                    <label for="patient-name">Patient Name</label>
+                    <input type="text" id="patient-name" name="patient_name" placeholder="Enter patient's full name" required>
+                </div>
+                <div class="form-group">
+                    <label for="image-files">Select Images</label>
+                    <input type="file" id="image-files" name="files" accept="image/jpeg, image/png" multiple required>
+                </div>
+                <button type="submit" id="submit-btn">Analyze and Save</button>
+            </form>
+        </div>
+    </template>
+
+    <template id="patient-list-page">
+        <div id="patient-list-section">
+            <h2>All Patients</h2>
+            <div id="patients-container">
+                <!-- Patient list will be injected here -->
+            </div>
+        </div>
+    </template>
+
+    <template id="patient-detail-page">
+         <div id="results-section">
+            <h2>Analysis Results</h2>
+            <p><strong>Patient:</strong> <span id="result-patient-name"></span></p>
+            <div id="results-container">
+                <!-- Results will be injected here -->
+            </div>
+            <button id="back-to-patients-btn">Back to Patient List</button>
+        </div>
+    </template>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
