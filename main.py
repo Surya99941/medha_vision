@@ -52,11 +52,11 @@ app.mount(f"/{STATIC_DIR}", StaticFiles(directory=STATIC_DIR), name="static")
 # --- Model Loading ---
 try:
     script_dir = os.path.dirname(os.path.realpath(__file__))
-    weights_path = os.path.join(script_dir, '..', '..', 'weights', 'xray.pt')
-    fracture_model = YOLO("./weights/xray.pt")
-    tumor_model = YOLO("./weights/xray.pt")
-    # Corrected path for the tumor model
-    # tumor_model = YOLO("https://github.com/roboflow-ai/brain-tumor-detection-yolov8/releases/download/v1/braintumor_best.pt")
+    fracture_model_path = os.path.join(script_dir, 'weights', 'xray.pt')
+    tumor_model_path = os.path.join(script_dir, 'weights', 'braintumor_best.pt')
+    
+    fracture_model = YOLO(fracture_model_path)
+    tumor_model = YOLO(tumor_model_path)
 except Exception as e:
     print(f"Error loading models: {e}")
     exit()
