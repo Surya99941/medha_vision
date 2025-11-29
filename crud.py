@@ -37,3 +37,12 @@ def create_patient_image(db: Session, image: schemas.ImageCreate, patient_id: in
 
 def get_image(db: Session, image_id: int):
     return db.query(models.Image).filter(models.Image.id == image_id).first()
+
+def update_image_summary(db: Session, image_id: int, summary: str):
+    db_image = get_image(db, image_id)
+    if db_image:
+        db_image.summary = summary
+        db.commit()
+        db.refresh(db_image)
+    return db_image
+

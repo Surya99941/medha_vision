@@ -90,27 +90,66 @@ def run_brain_ct_tumor(image_path: str) -> Dict[str, Any]:
     }
 
 @tool
-def contextual_q_and_a(findings: str, user_prompt: str) -> str:
+def create_summary_from_annotations(image_id: int, image_path: str, workflow: str, boxes_xywhn: List[List[float]], scores: List[float]) -> str:
+    """
+    Generates a summary from annotations and saves it to the database.
+    """
+    db: Session = next(get_db())
+    findings_count = len(boxes_xywhn)
+    
+    prompt = (
+        f"Summarize the following medical imaging analysis result. "
+        f"Workflow: {workflow}. Number of findings: {findings_count}, Confidence scores of each findings {scores}"
+        f"Summsry format : Describe the scan, what is the diagnosis and how confident you are. For example: The medical image identified high likelihood of fracture with a confidence of . Pease review"
+    )
+
+    if findings_count == 0:
+        summary = f"A {workflow.replace('_', ' ')} was performed and no anomalies were detected."
+    else:
+        try:
+            response = llm.invoke(prompt)
+            print(response)
+            summary = response.content
+        except Exception as e:
+            print(f"Error generating summary with LLM: {e}")
+            raise e
+            # summary = f"A {workflow.replace('_', ' ')} was performed, and {findings_count} potential anomalies were identified."
+
+    crud.update_image_summary(db, image_id=image_id, summary=summary)
+    return {
+        "workflow": workflow, "image_path": image_path,
+        "boxes_xywhn": boxes_xywhn,
+        "scores": scores,
+        "summary": summary
+    }
+
+
+@tool
+def contextual_q_and_a(image_id: int, user_prompt: str) -> str:
     """
     Answers user questions about medical imaging analysis results.
 
     Args:
-        findings: A JSON string detailing the analysis findings (workflow, boxes, scores).
+        image_id: The ID of the image to get the summary for.
         user_prompt: The user's question regarding the findings.
 
     Returns:
         A natural language response based on the provided findings and question.
         This function is designed to be descriptive and avoid making a medical diagnosis.
     """
+    db: Session = next(get_db())
+    image = crud.get_image(db, image_id)
+    summary = image.summary if image else "No summary available."
+
     system_prompt = (
         "You are a helpful medical imaging assistant. Your role is to interpret the "
         "results of a detection model and answer the user's question based on those "
         "results. DO NOT provide a medical diagnosis.\n\n"
-        "Here are the findings from the analysis:\n{findings}\n\n"
-        "Based on these findings, provide a clear and concise answer to the user's question."
+        "Here is the summary of the analysis:\n{summary}\n\n"
+        "Based on this summary, provide a clear and concise answer to the user's question."
     )
     
-    formatted_prompt = system_prompt.format(findings=findings)
+    formatted_prompt = system_prompt.format(summary=summary)
     
     # Using the existing llm instance for a direct call
     response = llm.invoke([
@@ -119,14 +158,14 @@ def contextual_q_and_a(findings: str, user_prompt: str) -> str:
     ])
     return response.content
 
-tools.extend([run_xray_fracture, run_brain_ct_tumor, contextual_q_and_a])
+tools.extend([run_xray_fracture, run_brain_ct_tumor, create_summary_from_annotations])
 scan_agent = create_agent(model=llm, tools=tools)
 
 # --- Core Analysis Logic (Synchronous) ---
 # Note: these are blocking calls and should be run in FastAPI's thread pool,
 # which is done automatically for `def` endpoints.
 
-def analyze_scan(image_path: str):
+def analyze_scan(image_path: str, image_id: int):
     """Invokes the LangChain agent to analyze a single image."""
     with open(image_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("utf-8")
@@ -135,7 +174,9 @@ def analyze_scan(image_path: str):
             "You are a triage assistant for medical imaging. Look at the image and "
             "decide if it is an X-ray for fracture detection or a brain CT for tumor detection. "
             "Call EXACTLY ONE tool: 'run_xray_fracture' for X-RAYs or 'run_brain_ct_tumor' for BRAIN CTs. "
-            f"Use this exact path: {image_path}"
+            f"Use this exact path: {image_path}. "
+            "Then, using the output from the analysis tool, call the 'create_summary_from_annotations' tool to create a summary. "
+            f"Use this exact image_id: {image_id}"
         )},
         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
     ]
@@ -202,23 +243,27 @@ def analyze_images_endpoint(
 
     with tempfile.TemporaryDirectory() as temp_dir:
         for file in files:
+            # Create initial image record
+            image_data = schemas.ImageCreate(original_filename=file.filename)
+            db_image = crud.create_patient_image(db, image=image_data, patient_id=patient_id)
+            
             temp_path = os.path.join(temp_dir, file.filename)
             with open(temp_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
             # These are blocking, CPU-bound/IO-bound operations
-            agent_result = analyze_scan(temp_path)
+            agent_result = analyze_scan(temp_path, db_image.id)
             tool_result = extract_tool_result(agent_result)
-            annotated_image_url = save_analysis_result(tool_result) if tool_result else None
             
-            image_data = schemas.ImageCreate(
-                original_filename=file.filename,
-                annotated_image_url=annotated_image_url,
-                analysis_workflow=tool_result.get("workflow", "error") if tool_result else "error",
-                scores=tool_result.get("scores", []) if tool_result else [],
-                boxes_xywhn=tool_result.get("boxes_xywhn", []) if tool_result else [],
-            )
-            crud.create_patient_image(db, image=image_data, patient_id=patient_id)
+            # Update image record with analysis results
+            if tool_result:
+                db_image.annotated_image_url = save_analysis_result(tool_result)
+                db_image.analysis_workflow = tool_result.get("workflow", "error")
+                db_image.scores = tool_result.get("scores", [])
+                db_image.boxes_xywhn = tool_result.get("boxes_xywhn", [])
+                db_image.summary = tool_result.get("summary")
+                db.commit()
+                db.refresh(db_image)
 
     # Fetch the complete patient object with all relationships loaded
     updated_patient = crud.get_patient(db, patient_id=patient_id)

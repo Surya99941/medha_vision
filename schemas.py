@@ -9,6 +9,7 @@ class ImageBase(BaseModel):
     analysis_workflow: Optional[str] = None
     scores: Optional[List[float]] = []
     boxes_xywhn: Optional[List[List[float]]] = []
+    summary: Optional[str] = None
 
 class ImageCreate(ImageBase):
     pass

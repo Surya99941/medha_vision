@@ -2,3 +2,5 @@ generated
 runs
 .pyc
 venv
+__pycache__
+alembic

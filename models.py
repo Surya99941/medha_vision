@@ -22,6 +22,7 @@ class Image(Base):
     analysis_workflow = Column(String, nullable=True)
     scores = Column(JSON, nullable=True)
     boxes_xywhn = Column(JSON, nullable=True)
+    summary = Column(String, nullable=True)
     patient_id = Column(Integer, ForeignKey("patients.id"))
 
     patient = relationship("Patient", back_populates="images")

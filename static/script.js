@@ -157,6 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
             content = `
                 <img src="${image.annotated_image_url}" alt="Annotated image of ${escapeHTML(image.original_filename)}">
                 <div class="result-info">
+                    <p>${image.summary}</p>
                     <h3>${escapeHTML(image.original_filename)}</h3>
                     <p><strong>Workflow:</strong> <span class="workflow">${escapeHTML(image.analysis_workflow)}</span></p>
                     <p><strong>Confidence Scores:</strong> ${formatScores(image.scores)}</p>
